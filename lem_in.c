@@ -25,9 +25,12 @@
 #define OUT 1
 #define IN 2
 
+#define INVERS -1
 #define DEACTIVE 0
-#define ACTIVE 1
-#define FICTIOUS 2
+#define ACTIVE 2
+#define FICTIOUS 1
+#define FICTIOUS 1
+
 
 typedef struct		s_room
 {
@@ -55,6 +58,8 @@ typedef struct		s_path
 	int				flow_count;
 	int				length;
 	struct s_room	*rooms;
+	struct s_path	*way;
+	struct s_path	*prev_way;
 	struct s_path	*next;
 }					t_path;
 
@@ -64,6 +69,7 @@ typedef struct		s_all
 	int				count;
 	int				s_num;
 	int				e_num;
+	int				flows;
 	struct s_room	*rooms;
 	struct s_room	*start;
 	struct s_room	*end;
@@ -74,6 +80,30 @@ typedef struct		s_all
 
 
 int ft_dijkstra(t_all *all);
+
+
+#define INVERS -1
+#define DEACTIVE 0
+#define ACTIVE 2
+#define FICTIOUS 1
+#define FICTIOUS_NULL 3
+
+
+int		ft_cost(int active)
+{
+	if (active == ACTIVE)
+		return (2);
+	if (active == INVERS)
+		return (-1);
+	if (active == FICTIOUS)
+		return (2);
+	if (active == FICTIOUS_NULL)
+		return (1);
+	else
+		return (0);
+}
+
+
 
 
 t_room	*ft_create_room(char *name)
@@ -115,7 +145,7 @@ t_room	*ft_find_room_by_number(t_room *rooms, int num)
 	return (NULL);
 }
 
-t_tube	*ft_create_tube(t_room *rooms, char *name1, char *name2, int cost)
+t_tube	*ft_create_tube(t_room *rooms, char *name1, char *name2, int active)
 {
 	t_tube *tmp;
 	t_room *room1;
@@ -128,8 +158,8 @@ t_tube	*ft_create_tube(t_room *rooms, char *name1, char *name2, int cost)
 	tmp = (t_tube *)ft_memalloc(sizeof(t_tube));
 	if (!tmp)
 		return (NULL);
-	tmp->cost = cost;
-	tmp->active = ACTIVE;
+	tmp->active = active;
+	tmp->cost = ft_cost(active);
 	tmp->room1 = room1;
 	tmp->room2 = room2;
 	return (tmp);
@@ -156,7 +186,7 @@ int		ft_add_room(t_room **rooms, char *name)
 }
 
 
-int		ft_add_tube(t_all *all, char *name1, char *name2, int cost)
+int		ft_add_tube(t_all *all, char *name1, char *name2, int active)
 {
 	t_tube **tubes;
 	t_room *rooms;
@@ -166,7 +196,7 @@ int		ft_add_tube(t_all *all, char *name1, char *name2, int cost)
 	rooms = all->rooms;
 	if (!tubes || !rooms)
 		return (FAIL);
-	new_tube = ft_create_tube(rooms, name1, name2, cost);
+	new_tube = ft_create_tube(rooms, name1, name2, active);
 	if (!new_tube)
 		return (FAIL);
 	new_tube->next = *tubes;
@@ -213,20 +243,20 @@ void	ft_change_tube(t_all *all, char *old, char *new, int in_out)
 		if (old_room == tube->room1 && in_out == OUT && tube->active == ACTIVE)
 		{
 			tube->active = DEACTIVE;
-			ft_add_tube(all, new, tube->room2->name, 2);
+			ft_add_tube(all, new, tube->room2->name, FICTIOUS);
 		}
 		if (old_room == tube->room2 && in_out == IN && tube->active == ACTIVE)
 		{
 			tube->active = DEACTIVE;
-			ft_add_tube(all, tube->room1->name, new, 2);
+			ft_add_tube(all, tube->room1->name, new, FICTIOUS);
 		}
 		tube = tube->next;
 	}
 
 	if (in_out == OUT)
-		ft_add_tube(all, new, old, 1);
+		ft_add_tube(all, new, old, FICTIOUS_NULL);
 	else if (in_out == IN)
-		ft_add_tube(all, old, new, 1);
+		ft_add_tube(all, old, new, FICTIOUS_NULL);
 }
 
 
@@ -255,7 +285,7 @@ void	ft_restruct_tube(t_all *all, char *first, char *second)
 	ft_change_tube(all, second, second_in, IN);
 
 	//добавляем связь между новыми комнатами
-	ft_add_tube(all, second_in, first_out, -1);
+	ft_add_tube(all, second_in, first_out, INVERS);
 
 	free(second_in);
 	free(first_out);
@@ -274,6 +304,19 @@ void ft_print_rooms(t_room *rooms)
 			printf("->%s", rooms->origin->name);
 		printf("\n");
 		rooms = rooms->next;
+	}
+}
+
+void ft_print_paths(t_path *paths)
+{
+	printf("__%d__\n", paths->flow_count);
+	while (paths)
+	{
+		printf("%s", paths->rooms->name);
+		if (paths->rooms->origin)
+			printf("->%s", paths->rooms->origin->name);
+		printf("\n");
+		paths = paths->way;
 	}
 }
 
@@ -307,6 +350,46 @@ t_path	*ft_create_path(t_room *room, int flow_count)
 {
 	t_path *tmp;
 
+	if (!room)
+		return (NULL);
+	tmp = (t_path *)ft_memalloc(sizeof(t_path));
+	if (!tmp)
+		return (NULL);
+	tmp->rooms = room;
+	tmp->flow_count = flow_count;
+	return (tmp);
+}
+
+t_path	*ft_create_way(t_room *room, int flow_count)
+{
+	t_path *begin;
+	t_path *tmp;
+
+	if (!room || !room->prev)
+		return (NULL);
+	begin = NULL;
+	while (room)
+	{
+		if (room->origin)
+			tmp = ft_create_path(room->origin, flow_count);
+		else
+			tmp = ft_create_path(room, flow_count);
+		if (!tmp)
+			return (NULL);//надо удалить созданную цепочку и все похерить
+		tmp->way = begin;
+		if (begin)
+			begin->prev_way = tmp;
+		begin = tmp;
+		room = room->prev;
+	}
+	return (begin);
+}
+
+/*
+t_path	*ft_create_way(t_room *room, int flow_count)
+{
+	t_path *tmp;
+
 	if (!room || !room->prev)
 		return (NULL);
 	tmp = (t_path *)ft_memalloc(sizeof(t_path));
@@ -322,12 +405,13 @@ t_path	*ft_create_path(t_room *room, int flow_count)
 	tmp->flow_count = flow_count;
 	return (tmp);
 }
+*/
 
 int 	ft_add_path(t_all *all, int flow_count)
 {
 	t_path *path;
 
-	if (!(path = ft_create_path(all->end, flow_count)))
+	if (!(path = ft_create_way(all->end, flow_count)))
 		return (FAIL);
 	path->next = all->paths;
 	all->paths = path;
@@ -360,7 +444,21 @@ t_path	*ft_copy_paths(t_path *path, int flow_count)
 }
 */
 
-void	ft_copy_last_paths_with_same_flows(t_all *all)
+void	ft_restore_path_at_rooms(t_path *paths)
+{
+	t_room *room;
+
+	room = paths->rooms;
+	while (paths->way)
+	{
+		paths = paths->way;
+		paths->rooms->prev = room;
+		room = paths->rooms;
+	}
+}
+
+
+int		ft_copy_last_paths_with_same_flows(t_all *all)
 {
 	t_path *check_path;
 	t_path *path_new;
@@ -368,18 +466,16 @@ void	ft_copy_last_paths_with_same_flows(t_all *all)
 	int flow;
 
 	check_path = all->paths;
+	if (!check_path)
+		return (FAIL);
 	flow = check_path->flow_count;
-
 	while (check_path && check_path->flow_count == flow)
 	{
-		origin = check_path->rooms;
-		while (origin->next)
-			origin = origin->next;
-		path_new = ft_create_path(origin, flow + 1);
-		path_new->next = all->paths;
-		all->paths = path_new;
+		ft_restore_path_at_rooms(check_path);
+		ft_add_path(all, flow + 1);
 		check_path = check_path->next;
 	}
+	return (SUCCESS);
 }
 
 
@@ -387,23 +483,25 @@ void	ft_deactive_new_paths(t_all *all)
 {
 	int flow;
 	t_path *check_path;
-	t_room *room;
+	t_path *room;
 
 	check_path = all->paths;
+	if (!check_path)
+		return ;
 	flow = check_path->flow_count;
 	while (check_path && check_path->flow_count == flow)
 	{
-		room = check_path->rooms;
+		room = check_path;
 		//printf("__%s_%s__\n", all->start->name, all->end->name);
-		while (room->next)
+		while (room->way)
 		{
 			//printf(" _%s_%s_\n", room->name, room->next->name);
-			if (ft_strcmp(room->name, all->start->name) && ft_strcmp(room->name, all->end->name) &&
-			ft_strcmp(room->next->name, all->start->name) && ft_strcmp(room->next->name, all->end->name))
-				ft_restruct_tube(all, room->name, room->next->name);
+			if (ft_strcmp(room->rooms->name, all->start->name) && ft_strcmp(room->rooms->name, all->end->name) &&
+			ft_strcmp(room->way->rooms->name, all->start->name) && ft_strcmp(room->way->rooms->name, all->end->name))
+				ft_restruct_tube(all, room->rooms->name, room->way->rooms->name);
 			else
-				ft_deactive_tube(all, room->name, room->next->name);
-			room = room->next;
+				ft_deactive_tube(all, room->rooms->name, room->way->rooms->name);
+			room = room->way;
 		}
 		check_path = check_path->next;
 	}
@@ -413,32 +511,128 @@ void	ft_deactive_new_paths(t_all *all)
 
 
 
+void	ft_del_fictious_rooms(t_all *all)
+{
+	t_room *room;
+
+	while (all->rooms->origin)
+	{
+		room = all->rooms;
+		all->rooms = all->rooms->next;
+		free(room->name);
+		free(room);
+	}
+}
+
+void	ft_del_fictious_tubes(t_all *all)
+{
+	t_tube *tube;
+
+	while (all->tubes->active != ACTIVE && all->tubes->active != DEACTIVE)
+	{
+		tube = all->tubes;
+		all->tubes = tube->next;
+		free(tube);
+	}
+	tube = all->tubes;
+	while (tube)
+	{
+		tube->active = ACTIVE;
+		tube = tube->next;
+	}
+}
+
+t_path	*ft_find_similar_room(t_path *path, t_path *find)
+{
+	if (!path || !find || !(find->way) || !(find->prev_way))
+		return (NULL);
+	while (path)
+	{
+		if (path->rooms == find->rooms)
+			return (path);
+		path = path->way;
+	}
+	return (NULL);
+}
+
+void	ft_swap_paths(t_path *path1, t_path *path2)
+{
+	t_path *temp_path;
+
+	if (!path1 || !path2)
+		return ;
+	//ft_print_paths(path1);
+	temp_path = path1->way;
+	path1->way = path2->way->way;
+	path1->way->prev_way = path1;
+	free(path2->way);
+	path2->way = temp_path->way;
+	path2->way->prev_way = path2;
+	free(temp_path);
+}
+
+void	ft_merge_paths(t_path *path)
+{
+	t_path *check_path;
+	t_path *first_path;
+	t_path *room;
+	int flow;
+
+	flow = path->flow_count;
+	first_path = path->next;
+	if (flow == 1)
+		return ;
+	while (path->way)
+		path = path->way;
+	while (path)
+	{
+		check_path = first_path;
+		while (check_path && flow == check_path->flow_count)
+		{
+			if ((room = ft_find_similar_room(check_path, path->way)))
+				ft_swap_paths(room, path);
+			check_path = check_path->next;
+		}
+		path = path->prev_way;
+	}
+}
+
+
+/*
+if (ft_dijkstra(all) == SUCCESS)
+{
+	ft_add_path(all, 1);
+	ft_find_another_path(all);
+}
+*/
 
 int	ft_find_another_path(t_all *all)
 {
-	t_path *path;
+	int answer;
 
-	ft_copy_last_paths_with_same_flows(all);
-	//ft_print_rooms(all->paths->next->rooms);
-	//printf("_%d\n", all->paths->flow_count);
+	answer = FAIL;
 	ft_deactive_new_paths(all);
-	//ft_dijkstra(all);
 	if (ft_dijkstra(all) == SUCCESS)
 	{
-		//path =
-		ft_add_path(all, all->paths->flow_count);
-		//ft_merge_paths(all->paths, path);
+		if (ft_copy_last_paths_with_same_flows(all) == SUCCESS)
+			ft_dijkstra(all);
+		(all->flows)++;
+		ft_add_path(all, all->flows);
+		ft_merge_paths(all->paths);
+		answer = SUCCESS;
 	}
-	else
-	{
-		;
-	}
+	ft_del_fictious_rooms(all);
+	ft_del_fictious_tubes(all);
+	//ft_print_tubes(all->tubes);
+	//ft_active_new_paths(all);
 
-	ft_print_rooms(all->paths->next->rooms);
-	printf("_________________\n");
-	ft_print_rooms(all->paths->rooms);
+	//ft_print_paths(all->paths->next->next);
+//	printf("_________________\n");
+//	ft_print_paths(all->paths->next);
+//	printf("_________________\n");
+//	ft_print_paths(all->paths);
 
-	return (0);
+	return (answer);
 }
 
 
@@ -633,6 +827,8 @@ int main()
 	ft_add_room(&rooms, "5");
 	ft_add_room(&rooms, "6");
 	ft_add_room(&rooms, "7");
+//	ft_add_room(&rooms, "8");
+//	ft_add_room(&rooms, "9");
 
 	t_all *all;
 	all = ft_create_all(rooms, "0", "7");
@@ -661,16 +857,55 @@ int main()
 	ft_add_tube(all, "4", "7", 2);
 	ft_add_tube(all, "7", "4", 2);
 
+/*
+all->tubes = ft_create_tube(all->rooms, "0", "1", ACTIVE);
+ft_add_tube(all, "1", "0", ACTIVE);
+ft_add_tube(all, "0", "3", ACTIVE);
+ft_add_tube(all, "3", "0", ACTIVE);
+ft_add_tube(all, "0", "7", ACTIVE);
+ft_add_tube(all, "7", "0", ACTIVE);
+ft_add_tube(all, "1", "2", ACTIVE);
+ft_add_tube(all, "2", "1", ACTIVE);
+ft_add_tube(all, "4", "2", ACTIVE);
+ft_add_tube(all, "2", "4", ACTIVE);
+ft_add_tube(all, "7", "8", ACTIVE);
+ft_add_tube(all, "8", "7", ACTIVE);
+ft_add_tube(all, "8", "9", ACTIVE);
+ft_add_tube(all, "9", "8", ACTIVE);
+ft_add_tube(all, "3", "5", ACTIVE);
+ft_add_tube(all, "5", "3", ACTIVE);
+ft_add_tube(all, "3", "4", ACTIVE);
+ft_add_tube(all, "4", "3", ACTIVE);
+ft_add_tube(all, "4", "9", ACTIVE);
+ft_add_tube(all, "9", "4", ACTIVE);
+ft_add_tube(all, "5", "6", ACTIVE);
+ft_add_tube(all, "6", "5", ACTIVE);
+ft_add_tube(all, "6", "9", ACTIVE);
+ft_add_tube(all, "9", "6", ACTIVE);
+*/
 
 	//ft_print_tubes(tubes);
 
+	//ft_find_another_path(all);
 
-
-	if (ft_dijkstra(all) == SUCCESS)
+/*	if (ft_dijkstra(all) == SUCCESS)
 	{
 		ft_add_path(all, 1);
-		//ft_print_rooms(all->paths->rooms);
+		//ft_print_paths(all->paths);
 		ft_find_another_path(all);
+	}
+*/
+	while (ft_find_another_path(all) == SUCCESS)
+	{
+		;
+	}
+
+
+	while (all->paths)
+	{
+	ft_print_paths(all->paths);
+	printf("_________________\n");
+	all->paths = all->paths->next;
 	}
 
 
@@ -744,5 +979,10 @@ int main()
 	}*/
 
 
+
+
+
+
+	exit (0);
 	return (0);
 }
