@@ -12,6 +12,7 @@
 
 #include "libft.h"
 #include "locale.h"
+#include <time.h>
 
 
 #define SUCCESS 0
@@ -239,19 +240,19 @@ t_ant	*ft_create_ant(int name)
 t_room	*ft_create_room(char *name)
 {
 	t_room	*tmp;
-	char	*space;
+	//char	*space;
 
 	if (!name)
 		return (NULL);
 	tmp = (t_room *)ft_memalloc(sizeof(t_room));
 	if (!tmp)
 		return (NULL);
-	space = ft_strchr(name, ' ');
-	*space = '\0';
+	//space = ft_strchr(name, ' ');
+	//*space = '\0';
 	tmp->name = ft_strdup(name);
 	if (!(tmp->name))
 		ft_memdel((void *)tmp);
-	*space = ' ';
+	//*space = ' ';
 	return (tmp);
 }
 
@@ -414,7 +415,7 @@ void	ft_change_in_tubes(t_all *all, t_room *old, char *new)
 /*
 **	Алгоритм Суурбалле: отключение маршрута, добавление фиктивных комнат
 */
-
+/*
 void	ft_restruct_tube(t_all *all, t_room *first, t_room *second)
 {
 
@@ -438,7 +439,6 @@ void	ft_restruct_tube(t_all *all, t_room *first, t_room *second)
 
 	ft_add_room(all, first_out);
 	all->rooms->origin = first;
-
 	ft_change_out_tubes(all, first, first_out);
 
 
@@ -449,6 +449,34 @@ void	ft_restruct_tube(t_all *all, t_room *first, t_room *second)
 	//free(second_in);
 	//free(first_out);
 	//добавляем связь между новыми комнатами
+	ft_add_tube(all, second_in, first_out, INVERS);
+
+}*/
+
+
+void	ft_restruct_tube(t_all *all, t_room *first, t_room *second)
+{
+	ft_deactive_tube(all, first, second);
+	ft_deactive_tube(all, second, first);
+	char first_out[ft_strlen(first->name) + 10];
+	char second_in[ft_strlen(second->name) + 10];
+
+	ft_memcpy((void *)first_out, first->name, ft_strlen(first->name) + 1);
+	ft_memcpy((void *)second_in, second->name, ft_strlen(second->name) + 1);
+	if (first != all->start)
+	{
+		ft_strcat(first_out, "_out ");
+		ft_add_room(all, first_out);
+		all->rooms->origin = first;
+		ft_change_out_tubes(all, first, first_out);
+	}
+	if (second != all->end)
+	{
+		ft_strcat(second_in, "_in ");
+		ft_add_room(all, second_in);
+		all->rooms->origin = second;
+		ft_change_in_tubes(all, second, second_in);
+	}
 	ft_add_tube(all, second_in, first_out, INVERS);
 
 }
@@ -675,11 +703,11 @@ void	ft_deactive_new_paths(t_all *all)
 			ft_strcmp(room->rooms->name, all->end->name) &&
 			ft_strcmp(room->way->rooms->name, all->start->name) &&
 			ft_strcmp(room->way->rooms->name, all->end->name))*/
-			if (room->rooms == all->start || room->rooms == all->end ||
+			/*if (room->rooms == all->start || room->rooms == all->end ||
 			room->way->rooms == all->start || room->way->rooms == all->end)
 				ft_deactive_tube(all, room->rooms, room->way->rooms);
 			else
-				ft_restruct_tube(all, room->rooms, room->way->rooms);
+			*/	ft_restruct_tube(all, room->rooms, room->way->rooms);
 
 			room = room->way;
 		}
@@ -881,19 +909,52 @@ int	ft_find_another_path(t_all *all)
 
 	answer = FAIL;
 
+	//ft_print_paths(all->paths);
+//	ft_putnbr(all->flows);
+//	write(1," ERROR1\n",8);
+
 	ft_deactive_new_paths(all);
+
+	ft_copy_last_paths_with_same_flows(all);
+	clock_t begin = clock();
+	clock_t end = clock();
+	printf("%lf\n", (double)(end - begin) / CLOCKS_PER_SEC);
+
 	if (ft_dijkstra(all) == SUCCESS)
 	{
-		if (ft_copy_last_paths_with_same_flows(all) == SUCCESS)
-			ft_dijkstra(all);
+
+		//if (ft_copy_last_paths_with_same_flows(all) == SUCCESS)
+		//	ft_dijkstra(all);
 		(all->flows)++;
+
 		ft_add_path(all, all->flows);
+
+		/*if (all->flows == 5)
+		{
+			t_path *path = all->paths;
+
+				while (path)
+				{
+					ft_print_paths(path);
+					printf("_________________\n");
+					path = path->next;
+				}
+				exit (0);
+		}*/
+
 		ft_merge_paths(all->paths);
+
+	//	ft_putnbr(all->flows);
+	//	write(1," ERROR2\n",8);
 		if (all->paths->way->rooms != all->end)
 			answer = SUCCESS;
 
 	}
-
+	//else
+	//	(all->flows)--;
+//	ft_putnbr(all->flows);
+//	write(1," ERROR3\n",8);
+	//ft_print_paths(all->paths);
 	ft_del_fictious_tubes_and_rooms(all);
 
 	return (answer);
@@ -955,21 +1016,24 @@ int ft_cost_of_tube(t_all *all, int room1_num, int room2_num)
 
 void	ft_choose_min_dist_from_active_visited_room_to_not_visited(t_all *all, int *distance, char *visited, int u)
 {
-	int cost;
+	t_tube *tube;
 	int i;
 
-	i = 0;
-	while (i < all->count)
+	tube = all->tubes;
+	while(tube)
 	{
-		cost = ft_cost_of_tube(all, u, i);
-		if (!visited[i] && distance[u] != INF &&
-		distance[u] + cost < distance[i])
+		if (tube->room1->num == u && tube->active)
 		{
-			distance[i] = distance[u] + cost;
-			ft_find_room_by_number(all->rooms, i)->prev = ft_find_room_by_number(all->rooms, u);
-			//pred[i] = u;
+			i = tube->room2->num;
+			if (!visited[i] && distance[u] != INF &&
+			distance[u] + tube->cost < distance[i])
+			{
+				distance[i] = distance[u] + tube->cost;
+				tube->room2->prev = tube->room1;
+				//pred[i] = u;
+			}
 		}
-		i++;
+		tube = tube->next;
 	}
 }
 
@@ -985,14 +1049,15 @@ int ft_dijkstra(t_all *all)
 	int		near_notvisited_room;
 
 	ft_clear_shorts_path(all);
+	//all->end->prev = NULL;
 	ft_bzero((void *)visited, all->count);
 	ft_memset((void *)distance, 7, 4 * all->count);
 	distance[all->start->num] = 0;
 	count = 0;
-	while (count < all->count)
+	while (count < all->count || !visited[all->end->num])
 	{
 		near_notvisited_room = ft_find_index_of_not_visited_room_with_min_dist(all, distance, visited);
-		if (near_notvisited_room == NO_CONNECT || visited[all->end->num])
+		if (near_notvisited_room == NO_CONNECT)
 			break ;
 		visited[near_notvisited_room] = TRUE;
 		ft_choose_min_dist_from_active_visited_room_to_not_visited(all, distance, visited, near_notvisited_room);
@@ -1095,7 +1160,9 @@ void	ft_ants_motion(t_all *all)
 {
 	t_ant *ant;
 	int first_ant;
+	int lines;
 
+	lines = 0;
 	while (all->end->empty_full < all->ant_count)
 	{
 		if (all->ant)
@@ -1115,7 +1182,9 @@ void	ft_ants_motion(t_all *all)
 			ant = ant->next;
 		}
 		printf("\n");
+		lines++;
 	}
+	printf("%d\n", lines);
 }
 
 
@@ -1532,12 +1601,12 @@ void	ft_push_back_list(t_all *all, t_list **last_list, char *buf, int stage)
 		return ;
 	if (!(*begin))
 	{
-		*begin = ft_lstnew((void *)buf, ft_strlen(buf));
+		*begin = ft_lstnew((void *)buf, ft_strlen(buf) + 1);
 		*last_list = *begin;
 	}
 	else
 	{
-		(*last_list)->next = ft_lstnew((void *)buf, ft_strlen(buf));
+		(*last_list)->next = ft_lstnew((void *)buf, ft_strlen(buf) + 1);
 		(*last_list) = (*last_list)->next;
 	}
 	if (!(*last_list))
@@ -1566,14 +1635,14 @@ void ft_print_list(t_list *list)
 
 void	read_file(t_all *all)
 {
-	t_list *begin;
-	t_list *last_list;
+	t_list	*begin;
+	t_list	*last_list;
 	char	*buf;
 
 	int		stage;
 	int		fd;
 
-	fd = 0;//open("text.txt", O_RDONLY);
+	fd = open("text.txt", O_RDONLY);
 	begin = NULL;
 	stage = BEGIN;
 
@@ -1589,29 +1658,35 @@ void	read_file(t_all *all)
 		else
 			ft_error(all, 2);
 	}
+	close(fd);
 }
 
 void	ft_create_all_rooms(t_all *all)
 {
 	t_list *begin;
+	char *space;
+	int start;
+	int end;
 
+	end = start = 0;
 	begin = all->list->next;
 	while(begin && begin->content_size < CHECKING_TUBES)
 	{
-		if (begin->content_size & NEXT_START)
-		{
-			begin = begin->next;
+		if ((space = ft_strchr(begin->content, ' ')))
+			space[0] = '\0';
+		if (((char *)(begin->content))[0] != '#')
 			ft_add_room(all, begin->content);
-			all->start = all->rooms;
-		}
-		else if (begin->content_size & NEXT_END)
-		{
-			begin = begin->next;
-			ft_add_room(all, begin->content);
+		if (space)
+			space[0] = ' ';
+		if (end == 1)
 			all->end = all->rooms;
-		}
-		else
-			ft_add_room(all, begin->content);
+		if (start == 1)
+			all->start = all->rooms;
+		end = start = 0;
+		if (begin->content_size & NEXT_START)
+			start = 1;
+		else if (begin->content_size & NEXT_END)
+			end = 1;
 		begin = begin->next;
 	}
 }
@@ -1627,11 +1702,14 @@ void	ft_create_all_tubes(t_all *all)
 		begin = begin->next;
 	while(begin)
 	{
-		minus = ft_strchr(begin->content, '-');
-		*minus = '\0';
-		ft_add_tube(all, begin->content, minus + 1, ACTIVE);
-		ft_add_tube(all, minus + 1, begin->content, ACTIVE);
-		*minus = '-';
+		if (((char *)(begin->content))[0] != '#')
+		{
+			minus = ft_strchr(begin->content, '-');
+			*minus = '\0';
+			ft_add_tube(all, begin->content, minus + 1, ACTIVE);
+			ft_add_tube(all, minus + 1, begin->content, ACTIVE);
+			*minus = '-';
+		}
 		begin = begin->next;
 	}
 }
@@ -1643,20 +1721,42 @@ int main()
 {
 	t_all *all;
 
+
 	all = ft_create_all(0);
 	read_file(all);
+
 	ft_create_all_rooms(all);
+
 	ft_create_all_tubes(all);
+
 	ft_create_antwood(all);
+
 	ft_print_list(all->list);
 	//ft_print_rooms(all->rooms);
 	//ft_print_tubes(all->tubes);
 
+	//printf("%d\n", all->ant);
+
 	while (ft_find_another_path(all) == SUCCESS && all->ant > all->paths->flow_count)
 		ft_recount_length_of_all_paths(all->paths);
-	ft_print_paths(all->paths);
-	if (all->paths)
-		ft_ants_motion(all);
+
+
+	/*	t_path *path = all->paths;
+
+		while (path)
+		{
+			ft_print_paths(path);
+			printf("_________________\n");
+			path = path->next;
+		}*/
+
+	//ft_print_paths(all->paths);
+
+	//if (all->paths)
+	//	ft_ants_motion(all);
+
+
+
 	ft_del_all(all);
 	return (0);
 }
