@@ -85,9 +85,9 @@ typedef struct		s_all
 	int				ant;
 	int				ant_count;
 	int				count;
-	int				s_num;
-	int				e_num;
+	int				path_count;
 	int				flows;
+	int				ant_count_on_path[100];
 	struct s_list	*list;
 	struct s_ant	*ants;
 	struct s_room	*rooms;
@@ -415,79 +415,11 @@ void	ft_change_in_tubes(t_all *all, t_room *old, char *new)
 /*
 **	Алгоритм Суурбалле: отключение маршрута, добавление фиктивных комнат
 */
-/*
-void	ft_restruct_tube(t_all *all, t_room *first, t_room *second)
-{
-
-	ft_deactive_tube(all, first, second);
-	ft_deactive_tube(all, second, first);
-
-	char first_out[ft_strlen(first->name) + 10];
-	char second_in[ft_strlen(second->name) + 10];
-
-	//создаем имена для новых комнат
-	//создаем новые комнаты
-	//перекидываем связи с существующего узла на новый
-
-	ft_memcpy((void *)first_out, first->name, ft_strlen(first->name) + 1);
-	ft_strcat(first_out, "_out ");
-	ft_memcpy((void *)second_in, second->name, ft_strlen(second->name) + 1);
-	ft_strcat(second_in, "_in ");
-
-	//first_out = ft_strjoin(first->name, "_out");
-	//second_in = ft_strjoin(second->name, "_in");
-
-	ft_add_room(all, first_out);
-	all->rooms->origin = first;
-	ft_change_out_tubes(all, first, first_out);
 
 
-
-	ft_add_room(all, second_in);
-	all->rooms->origin = second;
-	ft_change_in_tubes(all, second, second_in);
-	//free(second_in);
-	//free(first_out);
-	//добавляем связь между новыми комнатами
-	ft_add_tube(all, second_in, first_out, INVERS);
-
-}*/
-
-
-void	ft_restruct_tube(t_all *all, t_room *first, t_room *second)
-{
-	ft_deactive_tube(all, first, second);
-	ft_deactive_tube(all, second, first);
-	char first_out[ft_strlen(first->name) + 10];
-	char second_in[ft_strlen(second->name) + 10];
-
-	ft_memcpy((void *)first_out, first->name, ft_strlen(first->name) + 1);
-	ft_memcpy((void *)second_in, second->name, ft_strlen(second->name) + 1);
-	if (first != all->start)
-	{
-		ft_strcat(first_out, "_out ");
-		ft_add_room(all, first_out);
-		all->rooms->origin = first;
-		ft_change_out_tubes(all, first, first_out);
-	}
-	if (second != all->end)
-	{
-		ft_strcat(second_in, "_in ");
-		ft_add_room(all, second_in);
-		all->rooms->origin = second;
-		ft_change_in_tubes(all, second, second_in);
-	}
-	ft_add_tube(all, second_in, first_out, INVERS);
-
-}
 
 void	ft_restruct_point(t_all *all, t_room *first, t_room *second)
 {
-	//ft_deactive_tube(all, first, second);
-	//ft_deactive_tube(all, second, first);
-
-	//ft_deactive_tube(all, second, third);
-	//ft_deactive_tube(all, third, second);
 
 	char second_in[ft_strlen(second->name) + 10];
 
@@ -654,19 +586,6 @@ void	ft_clear_shorts_path(t_all *all)
 	}
 }
 
-/*
-t_path	*ft_copy_paths(t_path *path, int flow_count)
-{
-	t_room *origin;
-
-	origin = path->room;
-	while (origin->next)
-		origin = origin->next;
-	path_new = ft_create_path(origin, flow_count);
-
-	return (path_new);
-}
-*/
 
 /*
 **	проецирует выбранный маршрут на существующие комнаты для его копирования
@@ -732,41 +651,22 @@ void	ft_deactive_new_paths(t_all *all)
 	check_path = all->paths;
 	if (!check_path)
 		return ;
-
 	flow = check_path->flow_count;
-
 	while (check_path && check_path->flow_count == flow)
 	{
 		room = check_path;
-		//printf("__%s_%s__\n", all->start->name, all->end->name);
-	//	while (room->way)
-	//	{
-			//printf(" _%s_%s_\n", room->name, room->next->name);
-			/*if (ft_strcmp(room->rooms->name, all->start->name) &&
-			ft_strcmp(room->rooms->name, all->end->name) &&
-			ft_strcmp(room->way->rooms->name, all->start->name) &&
-			ft_strcmp(room->way->rooms->name, all->end->name))*/
-			/*if (room->rooms == all->start || room->rooms == all->end ||
-			room->way->rooms == all->start || room->way->rooms == all->end)
-				ft_deactive_tube(all, room->rooms, room->way->rooms);
-			else*/
-	//			ft_restruct_tube(all, room->rooms, room->way->rooms);
-	//		room = room->way;
-	//	}
 		while (room->way)
 		{
 			ft_deactive_tube(all, room->way->rooms, room->rooms);
 			ft_deactive_tube(all, room->rooms, room->way->rooms);
 			room = room->way;
 		}
-
 		room = check_path;
 		while (room->way->way)
 		{
 			ft_restruct_point(all, room->rooms, room->way->rooms);
 			room = room->way;
 		}
-		//ft_deactive_tube(all, room->rooms, room->way->rooms);
 		check_path = check_path->next;
 	}
 }
@@ -917,15 +817,15 @@ void	ft_recount_length_of_all_paths(t_path *path)
 	}
 }
 
+
 /*
-**	определение необходимого количества шагов при текущем потоке
+**	самый длинный маршрут в потоке
 */
 
-int		ft_find_count_of_step_for_ants_by_flow(t_all *all, int flow)
+int		ft_find_max_count_of_step_for_ant_by_flow(t_all *all, int flow)
 {
 	t_path	*path;
 	int		max_lenght;
-	int		step_count;
 
 	max_lenght = 0;
 	path = all->paths;
@@ -940,7 +840,69 @@ int		ft_find_count_of_step_for_ants_by_flow(t_all *all, int flow)
 			break ;
 		path = path->next;
 	}
-	step_count = all->ant / flow + ft_znak(all->ant % flow) + max_lenght - 1;
+	return (max_lenght);
+}
+
+/*
+**	эта функция определяет по каким маршрутам сколько пойдет муравьев
+**	и возвращает количество строк ответа
+*/
+
+int ft_count_of_ant_for_path_by_flow(t_all *all, int flow)
+{
+	t_path *path;
+	t_path *check_path;
+	int ant_count;
+	int lines;
+	int i;
+
+	i = 0;
+	path = all->paths;
+	ant_count = all->ant;
+	lines = 0;
+	ft_bzero((void *)all->ant_count_on_path, 400);
+	while (path && path->flow_count != flow)
+		path = path->next;
+	while (ant_count > 0)
+	{
+		check_path = path;
+		i = 0;
+		lines++;
+		while (check_path && check_path->flow_count == flow)
+		{
+			if (all->ant_count_on_path[i] + check_path->length < lines)
+			{
+				(all->ant_count_on_path[i])++;
+				ant_count--;
+			}
+			i++;
+			check_path = check_path->next;
+		}
+	}
+	return (lines);
+}
+
+
+int		ft_find_count_of_step_for_ants_by_flow(t_all *all, int flow)
+{
+	t_path	*path;
+	int		max_lenght;
+	int		step_count;
+	int		last_ants;
+
+	last_ants = 0;
+	max_lenght = ft_find_max_count_of_step_for_ant_by_flow(all, flow);
+	//max_lenght = ft_count_of_ant_for_path_by_flow(all, flow);
+	path = all->paths;
+	while (path)
+	{
+		if (path->flow_count == flow)
+			last_ants = last_ants + max_lenght - path->length;
+		else if (path->flow_count < flow)
+			break ;
+		path = path->next;
+	}
+	step_count = (all->ant - last_ants) / flow + ft_znak((all->ant - last_ants) / flow) +  max_lenght;
 	return (step_count);
 }
 
@@ -948,7 +910,7 @@ int		ft_find_count_of_step_for_ants_by_flow(t_all *all, int flow)
 **	определяет поток с наименьшим еоличеством шагов для перемещения
 */
 
-int		ft_choose_flow(t_all *all)
+int		ft_choose_min_flow(t_all *all)
 {
 	int best_flow;
 	int flow;
@@ -971,6 +933,7 @@ int		ft_choose_flow(t_all *all)
 	}
 	return (best_flow);
 }
+
 
 
 /*
@@ -1029,7 +992,6 @@ int	ft_find_another_path(t_all *all)
 
 
 
-
 		ft_add_path(all, all->flows);
 
 	/*	if (all->flows == 2)
@@ -1044,6 +1006,8 @@ int	ft_find_another_path(t_all *all)
 				//exit (0);
 		}*/
 
+		ft_merge_paths(all->paths);
+		ft_merge_paths(all->paths);
 		ft_merge_paths(all->paths);
 
 		ft_recount_length_of_all_paths(all->paths);
@@ -1096,28 +1060,7 @@ int		ft_find_index_of_not_visited_room_with_min_dist(t_all *all, int *distance, 
 	return(index);
 }
 
-/*
-**	для Дейкстры
-*/
 
-int ft_cost_of_tube(t_all *all, int room1_num, int room2_num)
-{
-	t_tube *tube;
-
-	tube = all->tubes;
-	while (tube)
-	{
-		if (room1_num == tube->room1->num && room2_num == tube->room2->num)
-		{
-			if (tube->active)
-				return (tube->cost);
-			else
-				return (INF);
-		}
-		tube = tube->next;
-	}
-	return (INF);
-}
 
 /*
 **	для Дейкстры
@@ -1203,53 +1146,46 @@ void ft_create_antwood(t_all *all)
 }
 
 /*
-**	активирует муравьев в заисимости от количества потоков
+**	назначаем все маршруты каждому муравью
 */
 
-void	ft_ant_activation(t_all *all)
+void	ft_choose_path_for_all_ants(t_all *all)
 {
-	int flows;
+	int i;
 	t_ant *ant;
 	t_path *path;
+	t_path *check_path;
 
-	flows = ft_choose_flow(all);
-	all->ant -= flows;
 	ant = all->ants;
 	path = all->paths;
-	while (path->flow_count != flows)
+	while (path && path->flow_count != all->flows)
 		path = path->next;
-	while (ant && flows)
+	while (ant)
 	{
-		if (ant->motion == START)
+		i = 0;
+		check_path = path;
+		while(ant && i < all->flows)
 		{
-			ant->motion = MOVE;
-			ant->step = path;
-			if (all->paths->way->rooms != all->end)
-			{//если вход и выход соединены одной трубой
-				path = path->next;
-				flows--;
+			if (all->ant_count_on_path[i] > 0)
+			{
+				(all->ant_count_on_path[i])--;
+				ant->step = check_path;
+				ant = ant->next;
 			}
+			i++;
+			check_path = check_path->next;
 		}
-		ant = ant->next;
 	}
 }
 
 /*
 **	функция перемещает одного муравья по его маршруту
 */
-
 int		ft_is_ant_step(t_all *all, t_ant *ant)
 {
-	if (ant->motion == MOVE && ant->step->rooms == all->start &&
-	ant->step->way->rooms->empty_full == FULL && all->paths->way->rooms != all->end)
-	{
-		ant->motion = START;
-		all->ant++;
-	}
-	if (ant->motion == MOVE && ant->step->rooms == all->end)
-		ant->motion = END;
-	if (ant->motion == MOVE && ant->step->way &&
-	(ant->step->way->rooms->empty_full == EMPTY ||
+	if (ant->step->rooms == all->end)
+		return(FALSE);
+	if (ant->step->way && (ant->step->way->rooms->empty_full == EMPTY ||
 	ant->step->way->rooms == all->end))
 	{
 		ant->step->rooms->empty_full -= FULL;
@@ -1262,21 +1198,43 @@ int		ft_is_ant_step(t_all *all, t_ant *ant)
 
 
 
+
+
+
+
+
+
 /*
 ** приводит муравьев в движение по их маршрутам
 */
 
 void	ft_ants_motion(t_all *all)
 {
+
 	t_ant *ant;
 	int first_ant;
 	int lines;
 
 	lines = 0;
+	all->flows = ft_choose_min_flow(all);
+	ft_count_of_ant_for_path_by_flow(all, all->flows);
+	ft_choose_path_for_all_ants(all);
+
+
+		/*t_path *path = all->paths;
+
+		while (path && path->flow_count != all->flows)
+			path = path->next;
+		int i = 0;
+		while (i < all->flows)
+		{
+			printf("%d__%d__%d\n", i, all->ant_count_on_path[i], path->length);
+			i++;
+			path = path->next;
+		}*/
+
 	while (all->end->empty_full < all->ant_count)
 	{
-		if (all->ant)
-			ft_ant_activation(all);
 		ant = all->ants;
 		first_ant = TRUE;
 		while (ant)
@@ -1295,221 +1253,9 @@ void	ft_ants_motion(t_all *all)
 		lines++;
 	}
 	printf("%d\n", lines);
+
 }
 
-
-
-
-//главная функция
-int main1()
-{
-
-
-
-	t_all *all;
-	//all = ft_create_all(rooms, "0", "7");
-	all = ft_create_all(2);
-
-	ft_add_room(all, "0");
-	ft_add_room(all, "1");
-	ft_add_room(all, "2");
-	ft_add_room(all, "3");
-	ft_add_room(all, "4");
-	ft_add_room(all, "5");
-	ft_add_room(all, "6");
-	ft_add_room(all, "7");
-	ft_add_room(all, "8");
-	ft_add_room(all, "9");
-
-
-
-
-
-
-	//ft_print_rooms(rooms);
-
-
-	printf("   -0    \n");
-	printf(" /  |       \n");
-	printf("3---2---1  \n");
-	printf("|   |   |     \n");
-	printf("6---5   4  \n");
-	printf("    |  /     \n");
-	printf("    7-  \n");
-	printf("       \n");
-
-
-	//all->tubes = ft_create_tube(all->rooms, "0", "2", ACTIVE);
-	ft_add_tube(all, "0", "2", ACTIVE);
-	ft_add_tube(all, "2", "0", ACTIVE);
-	ft_add_tube(all, "0", "3", ACTIVE);
-	ft_add_tube(all, "3", "0", ACTIVE);
-	ft_add_tube(all, "1", "2", ACTIVE);
-	ft_add_tube(all, "2", "1", ACTIVE);
-	ft_add_tube(all, "1", "4", ACTIVE);
-	ft_add_tube(all, "4", "1", ACTIVE);
-	ft_add_tube(all, "3", "2", ACTIVE);
-	ft_add_tube(all, "2", "3", ACTIVE);
-	ft_add_tube(all, "3", "6", ACTIVE);
-	ft_add_tube(all, "6", "3", ACTIVE);
-	ft_add_tube(all, "2", "5", ACTIVE);
-	ft_add_tube(all, "5", "2", ACTIVE);
-	ft_add_tube(all, "6", "5", ACTIVE);
-	ft_add_tube(all, "5", "6", ACTIVE);
-	ft_add_tube(all, "7", "5", ACTIVE);
-	ft_add_tube(all, "5", "7", ACTIVE);
-	ft_add_tube(all, "4", "7", ACTIVE);
-	ft_add_tube(all, "7", "4", ACTIVE);
-	ft_add_tube(all, "17", "41", ACTIVE);
-
-
-/*
-printf("1-------2    \n");
-printf("|       |       \n");
-printf("0---3---4---9-_  \n");
-printf("|   |       |  |  \n");
-printf("|   5-------6  |\n");
-printf("7--------------8      \n");
-printf("       \n");
-
-
-
-
-	//all->tubes = ft_create_tube(all->rooms, "0", "1", ACTIVE);
-	ft_add_tube(all, "0", "1", ACTIVE);
-	ft_add_tube(all, "1", "0", ACTIVE);
-	ft_add_tube(all, "0", "3", ACTIVE);
-	ft_add_tube(all, "3", "0", ACTIVE);
-	ft_add_tube(all, "0", "7", ACTIVE);
-	ft_add_tube(all, "7", "0", ACTIVE);
-	ft_add_tube(all, "1", "2", ACTIVE);
-	ft_add_tube(all, "2", "1", ACTIVE);
-	ft_add_tube(all, "4", "2", ACTIVE);
-	ft_add_tube(all, "2", "4", ACTIVE);
-	ft_add_tube(all, "7", "8", ACTIVE);
-	ft_add_tube(all, "8", "7", ACTIVE);
-	ft_add_tube(all, "8", "9", ACTIVE);
-	ft_add_tube(all, "9", "8", ACTIVE);
-	ft_add_tube(all, "3", "5", ACTIVE);
-	ft_add_tube(all, "5", "3", ACTIVE);
-	ft_add_tube(all, "3", "4", ACTIVE);
-	ft_add_tube(all, "4", "3", ACTIVE);
-	ft_add_tube(all, "4", "9", ACTIVE);
-	ft_add_tube(all, "9", "4", ACTIVE);
-	ft_add_tube(all, "5", "6", ACTIVE);
-	ft_add_tube(all, "6", "5", ACTIVE);
-	ft_add_tube(all, "6", "9", ACTIVE);
-	ft_add_tube(all, "9", "6", ACTIVE);
-
-	ft_add_tube(all, "9", "61", ACTIVE);
-*/
-	//ft_print_tubes(all->tubes);
-
-	//ft_find_another_path(all);
-
-/*	if (ft_dijkstra(all) == SUCCESS)
-	{
-		ft_add_path(all, 1);
-		//ft_print_paths(all->paths);
-		ft_find_another_path(all);
-	}
-*/
-
-
-	ft_create_antwood(all);
-	while (ft_find_another_path(all) == SUCCESS && all->ant > all->paths->flow_count)
-		ft_recount_length_of_all_paths(all->paths);
-
-
-/*	t_path *path = all->paths;
-
-	while (path)
-	{
-		ft_print_paths(path);
-		printf("_________________\n");
-		path = path->next;
-	}
-*/
-
-	if (all->paths)
-		ft_ants_motion(all);
-	ft_del_all(all);
-
-
-	//ft_deactive_tube(all, "0", "2");
-	//ft_deactive_tube(all, "2", "5");
-	//ft_restruct_tube(all, "2", "5");
-	//ft_deactive_tube(all, "5", "7");
-
-
-	//ft_print_tubes(all->tubes);
-
-
-	//ft_dijkstra(all);
-
-
-	//ft_create_path(all, 2);
-	//ft_print_rooms(all->paths->next->rooms);
-	//ft_print_rooms(all->paths->rooms);
-
-/*
-	char *str = NULL;
-	t_room *room = all->end;
-
-	while (room)
-	{
-		str = ft_strjoin_free(room->name, str, 0, 1);
-		str = ft_strjoin_free(" ", str, 0, 1);
-		room = room->prev;
-	}
-
-	printf("%s\n", str);
-*/
-
-
-
-	//short_path = Dijkstra(GR, start);
-	//printf("%s\n", short_path);
-/*
-	printf("0---1---3    \n");
-	printf(" \\   \\   \\  \n");
-	printf("  2---4---5     \n");
-	printf("       \n");
-	printf("неудобный короткий путь:\n");
-	printf(" 0 1 4 5\n");
-	printf("путь после отключения связей 0-1, 1-4, 4-5:\n");
-	GR[0][1] = 0;
-	GR[1][4] = 0;
-	GR[4][5] = 0;
-*/
-
-	//GR[0][2] = 0;
-	//GR[2][5] = 0;
-	//GR[5][7] = 0;
-	//short_path = Dijkstra(GR, start);
-	//printf("%s\n", short_path);
-
-
-	/*int **arr;
-	int i;
-	arr = GR;
-	while (arr[0])
-	{
-		i = 0;
-		while(i < V)
-		{
-			printf("%d\t", arr[0][i]);
-			i++;
-		}
-		arr++;
-		printf("\n");
-	}*/
-
-
-
-
-	return (0);
-}
 
 #define VALID_ERROR 0
 #define BEGIN 0x00000001
@@ -1522,6 +1268,10 @@ printf("       \n");
 #define CHECK_END_START 0x00000054
 #define CHECKING_TUBES 0x00000080
 
+/*
+**	блин, это ваще сложная херня для классификации считанной строки
+**	позваоляет предотвратить строчку, чтоящую повторно или не на своем месте и тп...
+*/
 
 void	ft_add_stage(int *stage, int next_stage)
 {
@@ -1752,7 +1502,7 @@ void	read_file(t_all *all)
 	int		stage;
 	int		fd;
 
-	fd = open("text.txt", O_RDONLY);
+	fd = 0;//open("text.txt", O_RDONLY);
 	begin = NULL;
 	stage = BEGIN;
 
@@ -1851,10 +1601,13 @@ int main()
 	int flow;
 	int flow2;
 
+
+
 	flow = INF;
 	while (ft_find_another_path(all) == SUCCESS &&
 	all->ant > all->flows &&
-	(flow2 = ft_find_count_of_step_for_ants_by_flow(all, all->flows)) < flow)
+	//(flow2 = ft_find_count_of_step_for_ants_by_flow(all, all->flows)) < flow + 1)
+	(flow2 = ft_count_of_ant_for_path_by_flow(all, all->flows)) < flow + 1)
 	{
 		flow = flow2;
 		//printf("%s\n", "AAA");
